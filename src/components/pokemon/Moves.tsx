@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { PokemonDetails } from '@/types/pokemon';
 import { capitalizeFirstLetter } from '@/utils/pokemon';
+import MoveTable from './MoveTable';
 
 interface MovesProps {
   pokemon: PokemonDetails;
@@ -30,11 +31,13 @@ export default function Moves({ pokemon }: MovesProps) {
     versionGroups[0] || ''
   );
 
-  // Filter moves for the selected version group
-  const filteredMoves = useMemo(() => {
-    if (!selectedVersionGroup) return [];
+  // Filter and categorize moves for the selected version group
+  const categorizedMoves = useMemo(() => {
+    if (!selectedVersionGroup) return { levelUp: [], machine: [], egg: [] };
 
-    const moves: MoveData[] = [];
+    const levelUp: MoveData[] = [];
+    const machine: MoveData[] = [];
+    const egg: MoveData[] = [];
 
     pokemon.moves.forEach(move => {
       const versionDetail = move.version_group_details.find(
@@ -42,24 +45,37 @@ export default function Moves({ pokemon }: MovesProps) {
       );
 
       if (versionDetail) {
-        moves.push({
+        const moveData: MoveData = {
           name: move.move.name,
           level: versionDetail.level_learned_at,
           method: versionDetail.move_learn_method.name
-        });
+        };
+
+        // Categorize by learn method
+        if (versionDetail.move_learn_method.name === 'level-up') {
+          levelUp.push(moveData);
+        } else if (versionDetail.move_learn_method.name === 'machine') {
+          machine.push(moveData);
+        } else if (versionDetail.move_learn_method.name === 'egg') {
+          egg.push(moveData);
+        }
       }
     });
 
-    // Sort by level (0 for non-level moves), then by name
-    return moves.sort((a, b) => {
+    // Sort level-up moves by level, others by name
+    levelUp.sort((a, b) => {
       if (a.level !== b.level) {
-        // Put level 0 moves at the end
         if (a.level === 0) return 1;
         if (b.level === 0) return -1;
         return a.level - b.level;
       }
       return a.name.localeCompare(b.name);
     });
+
+    machine.sort((a, b) => a.name.localeCompare(b.name));
+    egg.sort((a, b) => a.name.localeCompare(b.name));
+
+    return { levelUp, machine, egg };
   }, [pokemon.moves, selectedVersionGroup]);
 
   if (versionGroups.length === 0) {
@@ -70,7 +86,7 @@ export default function Moves({ pokemon }: MovesProps) {
     <div className="mt-8 bg-gray-50 rounded-lg p-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
         <h2 className="text-xl font-semibold text-gray-800 mb-4 sm:mb-0">
-          Moves ({filteredMoves.length} total)
+          Moves
         </h2>
 
         <div className="flex items-center space-x-2">
@@ -82,9 +98,21 @@ export default function Moves({ pokemon }: MovesProps) {
             value={selectedVersionGroup}
             onChange={(e) => setSelectedVersionGroup(e.target.value)}
             className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 min-w-[180px]"
+            style={{
+              color: '#111827', // text-gray-900
+              backgroundColor: '#f9fafb' // bg-gray-50
+            }}
           >
             {versionGroups.map(group => (
-              <option key={group} value={group}>
+              <option
+                key={group}
+                value={group}
+                style={{
+                  color: '#111827', // text-gray-900
+                  backgroundColor: '#ffffff', // bg-white
+                  padding: '8px 12px'
+                }}
+              >
                 {capitalizeFirstLetter(group.replace('-', ' '))}
               </option>
             ))}
@@ -92,44 +120,25 @@ export default function Moves({ pokemon }: MovesProps) {
         </div>
       </div>
 
-      {filteredMoves.length > 0 ? (
-        <div className="overflow-x-auto">
-          <table className="min-w-full bg-white border border-gray-200 rounded-lg">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
-                  Level
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
-                  Move Name
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
-                  Learn Method
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {filteredMoves.map((move, index) => (
-                <tr key={`${move.name}-${index}`} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm text-gray-900 font-medium">
-                    {move.level === 0 ? '—' : move.level}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-900">
-                    {capitalizeFirstLetter(move.name.replace('-', ' '))}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">
-                    {capitalizeFirstLetter(move.method.replace('-', ' '))}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div className="text-center py-8">
-          <p className="text-gray-500">No moves found for this version group.</p>
-        </div>
-      )}
+      <div className="space-y-6">
+        <MoveTable
+          moves={categorizedMoves.levelUp}
+          title="Level-up Moves"
+          showLevel={true}
+        />
+        <MoveTable
+          moves={categorizedMoves.machine}
+          title="Machine Moves"
+          collapsible={true}
+          defaultCollapsed={true}
+        />
+        <MoveTable
+          moves={categorizedMoves.egg}
+          title="Egg Moves"
+          collapsible={true}
+          defaultCollapsed={true}
+        />
+      </div>
     </div>
   );
 }
