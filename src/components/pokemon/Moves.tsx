@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { PokemonDetails } from '@/types/pokemon';
 import { capitalizeFirstLetter } from '@/utils/pokemon';
+import { getGenerationFromVersionGroup, getGenerationDisplayName } from '@/utils/generations';
 import MoveTable from './MoveTable';
 
 interface MovesProps {
@@ -16,24 +17,46 @@ interface MoveData {
 }
 
 export default function Moves({ pokemon }: MovesProps) {
-  // Extract all unique version groups
-  const versionGroups = useMemo(() => {
-    const groups = new Set<string>();
+  // Extract all unique generations from version groups
+  const availableGenerations = useMemo(() => {
+    const generations = new Set<string>();
+
     pokemon.moves.forEach(move => {
       move.version_group_details.forEach(detail => {
-        groups.add(detail.version_group.name);
+        const generation = getGenerationFromVersionGroup(detail.version_group.name);
+        if (generation) {
+          generations.add(generation);
+        }
       });
     });
-    return Array.from(groups).sort();
+
+    // Sort generations (generation-i, generation-ii, etc.)
+    return Array.from(generations).sort();
   }, [pokemon.moves]);
 
-  const [selectedVersionGroup, setSelectedVersionGroup] = useState<string>(
-    versionGroups[0] || ''
+  const [selectedGeneration, setSelectedGeneration] = useState<string>(
+    availableGenerations[availableGenerations.length - 1] || ''
   );
 
-  // Filter and categorize moves for the selected version group
+  // Get the first version group for the selected generation
+  const getVersionGroupForGeneration = (generation: string): string | null => {
+    for (const move of pokemon.moves) {
+      for (const detail of move.version_group_details) {
+        const moveGeneration = getGenerationFromVersionGroup(detail.version_group.name);
+        if (moveGeneration === generation) {
+          return detail.version_group.name;
+        }
+      }
+    }
+    return null;
+  };
+
+  // Filter and categorize moves for the selected generation
   const categorizedMoves = useMemo(() => {
-    if (!selectedVersionGroup) return { levelUp: [], machine: [], egg: [] };
+    if (!selectedGeneration) return { levelUp: [], machine: [], egg: [] };
+
+    const targetVersionGroup = getVersionGroupForGeneration(selectedGeneration);
+    if (!targetVersionGroup) return { levelUp: [], machine: [], egg: [] };
 
     const levelUp: MoveData[] = [];
     const machine: MoveData[] = [];
@@ -41,7 +64,7 @@ export default function Moves({ pokemon }: MovesProps) {
 
     pokemon.moves.forEach(move => {
       const versionDetail = move.version_group_details.find(
-        detail => detail.version_group.name === selectedVersionGroup
+        detail => detail.version_group.name === targetVersionGroup
       );
 
       if (versionDetail) {
@@ -76,9 +99,9 @@ export default function Moves({ pokemon }: MovesProps) {
     egg.sort((a, b) => a.name.localeCompare(b.name));
 
     return { levelUp, machine, egg };
-  }, [pokemon.moves, selectedVersionGroup]);
+  }, [pokemon.moves, selectedGeneration]);
 
-  if (versionGroups.length === 0) {
+  if (availableGenerations.length === 0) {
     return null;
   }
 
@@ -90,30 +113,30 @@ export default function Moves({ pokemon }: MovesProps) {
         </h2>
 
         <div className="flex items-center space-x-2">
-          <label htmlFor="version-group" className="text-sm font-medium text-gray-900">
-            Version Group:
+          <label htmlFor="generation-select" className="text-sm font-medium text-gray-900">
+            Generation:
           </label>
           <select
-            id="version-group"
-            value={selectedVersionGroup}
-            onChange={(e) => setSelectedVersionGroup(e.target.value)}
+            id="generation-select"
+            value={selectedGeneration}
+            onChange={(e) => setSelectedGeneration(e.target.value)}
             className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 min-w-[180px]"
             style={{
               color: '#111827', // text-gray-900
               backgroundColor: '#f9fafb' // bg-gray-50
             }}
           >
-            {versionGroups.map(group => (
+            {availableGenerations.map(generation => (
               <option
-                key={group}
-                value={group}
+                key={generation}
+                value={generation}
                 style={{
                   color: '#111827', // text-gray-900
                   backgroundColor: '#ffffff', // bg-white
                   padding: '8px 12px'
                 }}
               >
-                {capitalizeFirstLetter(group.replace('-', ' '))}
+                {getGenerationDisplayName(generation)}
               </option>
             ))}
           </select>
